@@ -2,7 +2,7 @@
  *
  * Pentaho Big Data
  *
- * Copyright (C) 2002-2013 by Pentaho : http://www.pentaho.com
+ * Copyright (C) 2002-2017 by Pentaho : http://www.pentaho.com
  *
  *******************************************************************************
  *
@@ -22,17 +22,15 @@
 
 package org.pentaho.amazon;
 
-import java.util.Arrays;
-
 import org.apache.commons.vfs2.FileSystemException;
 import org.apache.commons.vfs2.FileSystemManager;
 import org.apache.commons.vfs2.impl.DefaultFileSystemManager;
+import org.apache.commons.vfs2.impl.StandardFileSystemManager;
 import org.pentaho.di.core.annotations.KettleLifecyclePlugin;
 import org.pentaho.di.core.lifecycle.KettleLifecycleListener;
 import org.pentaho.di.core.lifecycle.LifecycleException;
 import org.pentaho.di.core.logging.LogChannel;
 import org.pentaho.di.core.logging.LogChannelInterface;
-import org.pentaho.di.core.vfs.KettleVFS;
 import org.pentaho.di.i18n.BaseMessages;
 import org.pentaho.s3.vfs.S3FileProvider;
 
@@ -44,6 +42,15 @@ import org.pentaho.s3.vfs.S3FileProvider;
 public class AmazonS3FileSystemBootstrap implements KettleLifecycleListener {
   private static Class<?> PKG = AmazonS3FileSystemBootstrap.class;
   private LogChannelInterface log = new LogChannel( AmazonS3FileSystemBootstrap.class.getName() );
+  private static final ThreadLocal<FileSystemManager> fsm = ThreadLocal.withInitial( () -> {
+    StandardFileSystemManager fsm = new StandardFileSystemManager();
+    try {
+      fsm.init();
+    } catch ( FileSystemException e ) {
+      e.printStackTrace();
+    }
+    return fsm;
+  });
 
   /**
    * @return the i18n display text for the S3 file system
@@ -56,10 +63,9 @@ public class AmazonS3FileSystemBootstrap implements KettleLifecycleListener {
   public void onEnvironmentInit() throws LifecycleException {
     try {
       // Register S3 as a file system type with VFS
-      FileSystemManager fsm = KettleVFS.getInstance().getFileSystemManager();
-      if ( fsm instanceof DefaultFileSystemManager ) {
-        if ( !Arrays.asList( fsm.getSchemes() ).contains( S3FileProvider.SCHEME ) ) {
-          ( (DefaultFileSystemManager) fsm ).addProvider( S3FileProvider.SCHEME, new S3FileProvider() );
+      if ( fsm.get() instanceof DefaultFileSystemManager ) {
+        if (!fsm.get().hasProvider( S3FileProvider.SCHEME )) {
+          ( ( DefaultFileSystemManager ) fsm.get() ).addProvider( S3FileProvider.SCHEME, new S3FileProvider() );
         }
       }
     } catch ( FileSystemException e ) {
